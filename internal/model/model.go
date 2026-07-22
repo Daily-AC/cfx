@@ -16,6 +16,24 @@ type Problem struct {
 	SolvedCount int      `json:"solvedCount,omitempty"`
 }
 
+type Contest struct {
+	ID                  int    `json:"id"`
+	Name                string `json:"name"`
+	Type                string `json:"type"`
+	Phase               string `json:"phase"`
+	Frozen              bool   `json:"frozen"`
+	DurationSeconds     int    `json:"durationSeconds"`
+	StartTimeSeconds    int64  `json:"startTimeSeconds,omitempty"`
+	RelativeTimeSeconds int64  `json:"relativeTimeSeconds,omitempty"`
+}
+
+func (c Contest) StartTime() time.Time {
+	if c.StartTimeSeconds == 0 {
+		return time.Time{}
+	}
+	return time.Unix(c.StartTimeSeconds, 0)
+}
+
 func (p Problem) ID() string { return formatID(p.ContestID, p.Index) }
 
 type Sample struct {
@@ -49,6 +67,19 @@ type Session struct {
 	Source    string    `json:"source"`
 	StartedAt time.Time `json:"startedAt"`
 	Attempts  []Attempt `json:"attempts"`
+}
+
+type ContestProblemWorkspace struct {
+	Problem   Problem `json:"problem"`
+	Directory string  `json:"directory"`
+}
+
+type ContestWorkspace struct {
+	Version   int                       `json:"version"`
+	Contest   Contest                   `json:"contest"`
+	Language  string                    `json:"language"`
+	CreatedAt time.Time                 `json:"createdAt"`
+	Problems  []ContestProblemWorkspace `json:"problems"`
 }
 
 type Submission struct {

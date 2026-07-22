@@ -28,6 +28,26 @@ func TestProblemsParsesRealResponseShape(t *testing.T) {
 	}
 }
 
+func TestContestsParsesRealResponseShape(t *testing.T) {
+	const fixture = `{"status":"OK","result":[{"id":2249,"name":"Codeforces Round 1112 (Div. 1)","type":"CF","phase":"BEFORE","frozen":false,"durationSeconds":9000,"startTimeSeconds":1785076500,"relativeTimeSeconds":-359631}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/contest.list" || r.URL.Query().Get("gym") != "false" {
+			t.Fatalf("request = %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		fmt.Fprint(w, fixture)
+	}))
+	defer server.Close()
+	client := NewClient()
+	client.BaseURL = server.URL
+	contests, err := client.Contests(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contests) != 1 || contests[0].ID != 2249 || contests[0].Phase != "BEFORE" || contests[0].StartTimeSeconds != 1785076500 {
+		t.Fatalf("unexpected contests: %+v", contests)
+	}
+}
+
 func TestAPIFailureIncludesComment(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"status":"FAILED","comment":"Call limit exceeded"}`)
