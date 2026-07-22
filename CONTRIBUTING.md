@@ -33,6 +33,11 @@ When changing either one:
 3. For submission changes, test with an intentionally accepted practice
    solution and report the resulting submission ID in the pull request.
 
+Search and contest changes should also be checked against live
+`problemset.problems` and `contest.list?gym=false` responses. A complete
+`contest start` integration check must verify the root `contest.json` and at
+least one generated problem's statement and sample files.
+
 Never automate login challenges or collect Codeforces passwords. `cfx auth`
 must continue to delegate authentication to a visible browser owned by the
 user.

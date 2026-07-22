@@ -61,6 +61,15 @@ func (c *Client) Problems(ctx context.Context) ([]model.Problem, error) {
 	return result.Problems, nil
 }
 
+func (c *Client) Contests(ctx context.Context) ([]model.Contest, error) {
+	params := url.Values{"gym": {"false"}}
+	var result []model.Contest
+	if err := c.get(ctx, "contest.list", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) Ping(ctx context.Context) error {
 	var result json.RawMessage
 	return c.get(ctx, "system.status", nil, &result)

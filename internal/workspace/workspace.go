@@ -61,6 +61,82 @@ func Create(dir string, statement model.Statement, language string) (model.Sessi
 	return session, nil
 }
 
+func CreateContest(dir string, contest model.Contest, statements []model.Statement, language string) (model.ContestWorkspace, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return model.ContestWorkspace{}, err
+	}
+	if entries, err := os.ReadDir(abs); err == nil && len(entries) > 0 {
+		return model.ContestWorkspace{}, fmt.Errorf("target directory is not empty: %s", abs)
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return model.ContestWorkspace{}, err
+	}
+	parent := filepath.Dir(abs)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return model.ContestWorkspace{}, err
+	}
+	staging, err := os.MkdirTemp(parent, ".cfx-contest-")
+	if err != nil {
+		return model.ContestWorkspace{}, err
+	}
+	defer os.RemoveAll(staging)
+
+	result := model.ContestWorkspace{
+		Version: 1, Contest: contest, Language: language, CreatedAt: time.Now(),
+		Problems: make([]model.ContestProblemWorkspace, 0, len(statements)),
+	}
+	for _, statement := range statements {
+		directory, err := safeProblemDirectory(statement.Index)
+		if err != nil {
+			return model.ContestWorkspace{}, err
+		}
+		if _, err := Create(filepath.Join(staging, directory), statement, language); err != nil {
+			return model.ContestWorkspace{}, err
+		}
+		result.Problems = append(result.Problems, model.ContestProblemWorkspace{Problem: statement.Problem, Directory: directory})
+	}
+	body, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return model.ContestWorkspace{}, err
+	}
+	if err := os.WriteFile(filepath.Join(staging, "contest.json"), append(body, '\n'), 0o644); err != nil {
+		return model.ContestWorkspace{}, err
+	}
+	if err := os.WriteFile(filepath.Join(staging, "README.md"), []byte(renderContest(result)), 0o644); err != nil {
+		return model.ContestWorkspace{}, err
+	}
+	if err := os.Remove(abs); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return model.ContestWorkspace{}, fmt.Errorf("prepare empty target directory: %w", err)
+	}
+	if err := os.Rename(staging, abs); err != nil {
+		return model.ContestWorkspace{}, err
+	}
+	return result, nil
+}
+
+func safeProblemDirectory(index string) (string, error) {
+	if index == "" {
+		return "", errors.New("problem index is empty")
+	}
+	for _, r := range index {
+		if (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' && r != '_' {
+			return "", fmt.Errorf("problem index %q is unsafe as a directory name", index)
+		}
+	}
+	return index, nil
+}
+
+func renderContest(session model.ContestWorkspace) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# %d. %s\n\n", session.Contest.ID, session.Contest.Name)
+	fmt.Fprintf(&b, "- Phase: %s\n- Type: %s\n- Problems: %d\n- Source: https://codeforces.com/contest/%d\n\n", session.Contest.Phase, session.Contest.Type, len(session.Problems), session.Contest.ID)
+	b.WriteString("## Problems\n\n")
+	for _, problem := range session.Problems {
+		fmt.Fprintf(&b, "- [%s. %s](%s/problem.md) - rating %d\n", problem.Problem.Index, problem.Problem.Name, problem.Directory, problem.Problem.Rating)
+	}
+	return b.String()
+}
+
 func Find(start string) (string, model.Session, error) {
 	dir, err := filepath.Abs(start)
 	if err != nil {

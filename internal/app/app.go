@@ -36,6 +36,14 @@ type command struct {
 }
 
 func Run(args []string, stdout, stderr io.Writer) error {
+	err := run(args, stdout, stderr)
+	if errors.Is(err, flag.ErrHelp) {
+		return nil
+	}
+	return err
+}
+
+func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		usage(stdout)
 		return nil
@@ -61,6 +69,10 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return c.sync(ctx, args[1:])
 	case "pick":
 		return c.pick(ctx, args[1:])
+	case "problem":
+		return c.problem(ctx, args[1:])
+	case "contest":
+		return c.contest(ctx, args[1:])
 	case "start":
 		return c.start(ctx, args[1:])
 	case "show":
@@ -86,6 +98,10 @@ Usage:
   cfx doctor [--json]
   cfx sync [--json]
   cfx pick [--rating N] [--min-rating N] [--max-rating N] [--tag TAG] [--unsolved] [--json]
+  cfx problem search [QUERY] [--min-rating N] [--max-rating N] [--contest ID] [--rated] [--tag TAG]... [--unsolved] [--sort solved|rating|name] [--limit N] [--json]
+  cfx contest search [QUERY] [--year N] [--div N] [--phase PHASE] [--type TYPE] [--limit N] [--json]
+  cfx contest show <contest-id> [--json]
+  cfx contest start <contest-id> [--dir PATH] [--lang cpp|python] [--json]
   cfx start <contest><index> [--dir PATH] [--lang cpp|python] [--json]
   cfx show [--json]
   cfx test [--json]
@@ -327,11 +343,18 @@ func (c *command) sync(ctx context.Context, args []string) error {
 	if err := saveCatalog(problems); err != nil {
 		return err
 	}
-	result := map[string]any{"count": len(problems), "syncedAt": time.Now()}
+	contests, err := c.api.Contests(ctx)
+	if err != nil {
+		return err
+	}
+	if err := saveContests(contests); err != nil {
+		return err
+	}
+	result := map[string]any{"problems": len(problems), "contests": len(contests), "syncedAt": time.Now()}
 	if *jsonOut {
 		return writeJSON(c.out, result)
 	}
-	fmt.Fprintf(c.out, "Synced %d problems.\n", len(problems))
+	fmt.Fprintf(c.out, "Synced %d problems and %d contests.\n", len(problems), len(contests))
 	return nil
 }
 

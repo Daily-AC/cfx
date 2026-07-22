@@ -11,8 +11,11 @@ Chrome profile or the optional extension embedded in the `cfx` binary.
 
 ## Features
 
-- Sync and cache the public Codeforces problem catalog.
+- Sync and cache the public Codeforces problem and contest catalogs.
 - Pick problems by rating, tag, and accepted-history exclusion.
+- Search problems by name, ID, tags, rating range, contest, and solved state.
+- Search contests by name or sponsor plus year, division, phase, and type.
+- Inspect a contest or create a complete multi-problem training workspace.
 - Fetch statements and samples despite Codeforces browser challenges by using
   a user-owned persistent Chrome profile.
 - Generate `AGENTS.md` so a coding agent coaches progressively instead of
@@ -52,6 +55,17 @@ cfx doctor
 cfx extension install
 cfx auth
 cfx sync
+
+# Search by name and multiple conditions. Flags may appear before or after the query.
+cfx problem search "shortest path" --min-rating 1400 --max-rating 1800 \
+  --tag graphs --tag "shortest paths" --unsolved
+
+# Find sponsored contests and inspect one.
+cfx contest search Huawei --year 2024 --phase FINISHED
+cfx contest show 2015
+
+# Fetch every problem into ./cf-contest-4/{A,B,C,D}.
+cfx contest start 4
 
 # Pick an unsolved implementation problem around 1200.
 cfx pick --rating 1200 --tag implementation --unsolved
@@ -110,6 +124,10 @@ cfx config get|set <key> [value]
 cfx doctor [--json]
 cfx sync [--json]
 cfx pick [--rating N] [--min-rating N] [--max-rating N] [--tag TAG] [--unsolved] [--json]
+cfx problem search [QUERY] [--min-rating N] [--max-rating N] [--contest ID] [--rated] [--tag TAG]... [--unsolved] [--sort solved|rating|name] [--limit N] [--json]
+cfx contest search [QUERY] [--year N] [--div N] [--phase PHASE] [--type TYPE] [--limit N] [--json]
+cfx contest show <contest-id> [--json]
+cfx contest start <contest-id> [--dir PATH] [--lang cpp|python] [--json]
 cfx start <contest><index> [--dir PATH] [--lang cpp|python] [--json]
 cfx show [--json]
 cfx test [--json]
@@ -117,13 +135,34 @@ cfx status [--wait] [--json]
 cfx submit --yes [--json]
 ```
 
+Search terms are case-insensitive and all terms must match. Repeated `--tag`
+flags are also ANDed. Contest sponsor search uses the public contest name;
+`--year` is derived from the UTC start time, and `--div` matches divisions in
+that name. `--limit 0` returns all matches.
+
+`cfx contest start` fetches every public programming problem before creating
+the destination, then writes this layout atomically:
+
+```text
+cf-contest-4/
+  contest.json
+  README.md
+  A/              # normal cfx problem workspace
+  B/
+  C/
+  D/
+```
+
+Run `cfx show`, `cfx test`, `cfx submit`, and `cfx status` from an individual
+problem directory.
+
 ## Architecture
 
 Codeforces exposes catalog and verdict data through its public API but does not
 provide problem statements or submission through that API. `cfx` therefore
 uses two deliberately separate transports:
 
-1. Public JSON API for catalog, accepted history, and verdicts. Requests are
+1. Public JSON API for problem and contest catalogs, accepted history, and verdicts. Requests are
    rate-limited to one every two seconds and retried only for transport or 5xx
    failures.
 2. A visible local Chrome/Chromium session for authentication, statements, and
