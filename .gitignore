@@ -1,0 +1,6 @@
+/cfx
+/dist/
+/.cfx/
+*.out
+*.exe
+__pycache__/
