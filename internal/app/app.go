@@ -200,7 +200,13 @@ func (c *command) doctor(ctx context.Context, args []string) error {
 		result.CodeforcesAPI = "OK"
 	}
 	if *jsonOut {
-		return writeJSON(c.out, result)
+		if err := writeJSON(c.out, result); err != nil {
+			return err
+		}
+		if !result.OK {
+			return errors.New("doctor found missing or unavailable dependencies")
+		}
+		return nil
 	}
 	fmt.Fprintf(c.out, "Codeforces API: %s\nChrome: %s\nC++ compiler: %s\nPython: %s\nHandle: %s\nConfig: %s\n", result.CodeforcesAPI, blank(result.Chrome), blank(result.Compiler), blank(result.Python), blank(result.Handle), result.ConfigPath)
 	if !result.OK {
