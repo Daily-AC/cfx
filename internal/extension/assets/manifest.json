@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "cfx Codeforces Bridge",
+  "version": "0.1.0",
+  "description": "Connects the local cfx CLI to the user's existing Codeforces browser session.",
+  "permissions": ["tabs", "scripting"],
+  "host_permissions": [
+    "http://127.0.0.1:27121/*",
+    "https://codeforces.com/*",
+    "https://m1.codeforces.com/*",
+    "https://m2.codeforces.com/*",
+    "https://m3.codeforces.com/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://127.0.0.1:27121/wake"],
+      "js": ["wake.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "cfx Codeforces Bridge"
+  }
+}

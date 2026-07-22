@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,23 +42,50 @@ func NewBrowser(cfg config.Config) (*Browser, error) {
 	return &Browser{ChromeBinary: bin, ProfileDir: profile}, nil
 }
 
-func (b *Browser) Auth(ctx context.Context) error {
+func (b *Browser) Auth(ctx context.Context) (string, error) {
 	page, cleanup, err := b.open(ctx, "https://codeforces.com/enter?back=%2Fproblemset")
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer cleanup()
-	fmt.Fprintln(os.Stderr, "Chrome opened with the cfx profile. Complete Codeforces login, then press Enter here.")
-	var line string
-	_, _ = fmt.Scanln(&line)
 	info, err := page.Info()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if strings.Contains(info.URL, "/enter") {
-		return errors.New("Codeforces still shows the login page")
+		fmt.Fprintln(os.Stderr, "Chrome opened with the cfx profile. Complete Codeforces login, then press Enter here.")
+		var line string
+		_, _ = fmt.Scanln(&line)
+		info, err = page.Info()
+		if err != nil {
+			return "", err
+		}
+		if strings.Contains(info.URL, "/enter") {
+			return "", errors.New("Codeforces still shows the login page")
+		}
 	}
-	return nil
+	links, err := page.Elements(`.lang-chooser a[href^="/profile/"]`)
+	if err != nil {
+		return "", fmt.Errorf("find logged-in handle: %w", err)
+	}
+	for _, link := range links {
+		href, err := link.Attribute("href")
+		if err != nil || href == nil {
+			continue
+		}
+		if handle := handleFromProfileHref(*href); handle != "" {
+			return handle, nil
+		}
+	}
+	return "", errors.New("login succeeded but the Codeforces handle was not found")
+}
+
+func handleFromProfileHref(href string) string {
+	path := strings.TrimPrefix(strings.TrimSpace(href), "/profile/")
+	if path == href || path == "" || strings.Contains(path, "/") {
+		return ""
+	}
+	return path
 }
 
 func (b *Browser) FetchStatement(ctx context.Context, problem model.Problem) (model.Statement, error) {
@@ -142,10 +170,16 @@ func (b *Browser) open(ctx context.Context, target string) (*rod.Page, func(), e
 	if err := os.MkdirAll(b.ProfileDir, 0o700); err != nil {
 		return nil, nil, err
 	}
+	if err := clearStaleProfileLock(b.ProfileDir); err != nil {
+		return nil, nil, err
+	}
 	l := launcher.New().Context(ctx).Bin(b.ChromeBinary).UserDataDir(b.ProfileDir).Headless(b.Headless)
 	l.Set("no-first-run").Set("disable-background-networking")
 	controlURL, err := l.Launch()
 	if err != nil {
+		if strings.Contains(err.Error(), "SingletonLock") || strings.Contains(err.Error(), "ProcessSingleton") {
+			return nil, nil, errors.New("the dedicated cfx Chrome profile is already in use; close its Chrome window, or run `cfx extension install` to use your existing Chrome profile")
+		}
 		return nil, nil, fmt.Errorf("launch Chrome: %w", err)
 	}
 	browser := rod.New().Context(ctx).ControlURL(controlURL)
@@ -166,10 +200,52 @@ func (b *Browser) open(ctx context.Context, target string) (*rod.Page, func(), e
 	return page, cleanup, nil
 }
 
+func clearStaleProfileLock(profile string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	target, err := os.Readlink(filepath.Join(profile, "SingletonLock"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect Chrome profile lock: %w", err)
+	}
+	host, err := os.Hostname()
+	if err != nil {
+		return nil
+	}
+	prefix := host + "-"
+	if !strings.HasPrefix(target, prefix) {
+		return nil
+	}
+	pid, err := strconv.Atoi(strings.TrimPrefix(target, prefix))
+	if err != nil || pid <= 0 {
+		return nil
+	}
+	if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
+		return nil
+	}
+	for _, name := range []string{"SingletonLock", "SingletonCookie", "SingletonSocket"} {
+		path := filepath.Join(profile, name)
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove stale Chrome profile lock %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
 func findChrome() string {
 	candidates := []string{"google-chrome", "chromium", "chromium-browser"}
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		candidates = append([]string{"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}, candidates...)
+	case "windows":
+		for _, base := range []string{os.Getenv("PROGRAMFILES"), os.Getenv("PROGRAMFILES(X86)"), os.Getenv("LOCALAPPDATA")} {
+			if base != "" {
+				candidates = append([]string{filepath.Join(base, "Google", "Chrome", "Application", "chrome.exe")}, candidates...)
+			}
+		}
 	}
 	for _, candidate := range candidates {
 		if filepath.IsAbs(candidate) {
@@ -237,9 +313,13 @@ func normalizeMath(root *goquery.Selection) {
 func selectionText(s *goquery.Selection) string {
 	parts := make([]string, 0, s.Length())
 	s.Each(func(_ int, item *goquery.Selection) {
+		name := goquery.NodeName(item)
 		blocks := item.ChildrenFiltered("p,ul,ol,pre")
-		if blocks.Length() == 0 {
+		if name == "p" || name == "ul" || name == "ol" || name == "pre" {
 			blocks = item
+		}
+		if blocks.Length() == 0 {
+			return
 		}
 		blocks.Each(func(_ int, block *goquery.Selection) {
 			text := ""

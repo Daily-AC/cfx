@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -59,6 +60,9 @@ func build(ctx context.Context, cfg config.Config, dir string, session model.Ses
 		return []string{cfg.Python, source}, func() {}, nil
 	}
 	binary := filepath.Join(dir, ".cfx", "solution")
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
 	if err := os.MkdirAll(filepath.Dir(binary), 0o755); err != nil {
 		return nil, nil, err
 	}
