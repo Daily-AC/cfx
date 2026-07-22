@@ -18,14 +18,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/e0-7/cfx/internal/bridge"
 	"github.com/e0-7/cfx/internal/codeforces"
 	"github.com/e0-7/cfx/internal/config"
+	"github.com/e0-7/cfx/internal/extension"
 	"github.com/e0-7/cfx/internal/model"
 	"github.com/e0-7/cfx/internal/runner"
 	"github.com/e0-7/cfx/internal/workspace"
 )
 
-const version = "0.1.0"
+var version = "0.1.0"
 
 type command struct {
 	out io.Writer
@@ -53,6 +55,8 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return c.doctor(ctx, args[1:])
 	case "auth":
 		return c.auth(ctx, args[1:])
+	case "extension":
+		return c.extension(args[1:])
 	case "sync":
 		return c.sync(ctx, args[1:])
 	case "pick":
@@ -77,6 +81,7 @@ func usage(w io.Writer) {
 
 Usage:
   cfx auth
+  cfx extension install|path
   cfx config get|set <key> [value]
   cfx doctor [--json]
   cfx sync [--json]
@@ -127,6 +132,8 @@ func configValue(cfg config.Config, key string) (string, error) {
 		return cfg.Python, nil
 	case "chromeBinary":
 		return cfg.ChromeBinary, nil
+	case "browserMode":
+		return cfg.BrowserMode, nil
 	case "programTypeId":
 		return cfg.ProgramType, nil
 	default:
@@ -149,6 +156,11 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		cfg.Python = value
 	case "chromeBinary":
 		cfg.ChromeBinary = value
+	case "browserMode":
+		if value != "dedicated" && value != "extension" {
+			return errors.New("browserMode must be dedicated or extension")
+		}
+		cfg.BrowserMode = value
 	case "programTypeId":
 		cfg.ProgramType = value
 	default:
@@ -162,6 +174,8 @@ type doctorResult struct {
 	ConfigPath    string `json:"configPath"`
 	Handle        string `json:"handle,omitempty"`
 	Chrome        string `json:"chrome,omitempty"`
+	BrowserMode   string `json:"browserMode"`
+	Extension     string `json:"extension,omitempty"`
 	Compiler      string `json:"compiler,omitempty"`
 	Python        string `json:"python,omitempty"`
 	CodeforcesAPI string `json:"codeforcesApi"`
@@ -179,11 +193,18 @@ func (c *command) doctor(ctx context.Context, args []string) error {
 		return err
 	}
 	path, _ := config.Path()
-	result := doctorResult{OK: true, ConfigPath: path, Handle: cfg.Handle}
+	result := doctorResult{OK: true, ConfigPath: path, Handle: cfg.Handle, BrowserMode: cfg.BrowserMode}
 	if browser, err := codeforces.NewBrowser(cfg); err == nil {
 		result.Chrome = browser.ChromeBinary
 	} else {
 		result.OK = false
+	}
+	if cfg.BrowserMode == "extension" {
+		if path, err := extension.Path(); err == nil {
+			result.Extension = path
+		} else {
+			result.OK = false
+		}
 	}
 	if path, err := exec.LookPath(cfg.CPPCompiler); err == nil {
 		result.Compiler = path
@@ -208,7 +229,7 @@ func (c *command) doctor(ctx context.Context, args []string) error {
 		}
 		return nil
 	}
-	fmt.Fprintf(c.out, "Codeforces API: %s\nChrome: %s\nC++ compiler: %s\nPython: %s\nHandle: %s\nConfig: %s\n", result.CodeforcesAPI, blank(result.Chrome), blank(result.Compiler), blank(result.Python), blank(result.Handle), result.ConfigPath)
+	fmt.Fprintf(c.out, "Codeforces API: %s\nChrome: %s\nBrowser mode: %s\nExtension: %s\nC++ compiler: %s\nPython: %s\nHandle: %s\nConfig: %s\n", result.CodeforcesAPI, blank(result.Chrome), result.BrowserMode, blank(result.Extension), blank(result.Compiler), blank(result.Python), blank(result.Handle), result.ConfigPath)
 	if !result.OK {
 		return errors.New("doctor found missing or unavailable dependencies")
 	}
@@ -223,9 +244,71 @@ func (c *command) auth(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	browser, err := codeforces.NewBrowser(cfg)
+	handle, err := c.authenticate(ctx, cfg)
 	if err != nil {
 		return err
+	}
+	cfg.Handle = handle
+	if err := config.Save(cfg); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.out, "Authenticated as %s.\n", handle)
+	return nil
+}
+
+func (c *command) extension(args []string) error {
+	if len(args) != 1 || (args[0] != "install" && args[0] != "path") {
+		return errors.New("usage: cfx extension install|path")
+	}
+	if args[0] == "path" {
+		path, err := extension.Path()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(c.out, path)
+		return nil
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	path, token, err := extension.Install(cfg.ExtensionToken)
+	if err != nil {
+		return err
+	}
+	cfg.BrowserMode = "extension"
+	cfg.ExtensionToken = token
+	if err := config.Save(cfg); err != nil {
+		return err
+	}
+	if browser, err := codeforces.NewBrowser(cfg); err == nil {
+		_ = exec.Command(browser.ChromeBinary, "chrome://extensions/").Start()
+	}
+	fmt.Fprintf(c.out, "Installed the unpacked extension at:\n%s\n\nIn chrome://extensions, enable Developer mode, choose Load unpacked, and select that directory. If cfx is already loaded, click Reload on its extension card. cfx now uses that Chrome profile.\n", path)
+	return nil
+}
+
+func (c *command) authenticate(ctx context.Context, cfg config.Config) (string, error) {
+	if cfg.BrowserMode == "extension" {
+		fmt.Fprintln(c.err, "Waiting for the cfx Chrome extension...")
+		data, err := c.runExtension(ctx, cfg, "whoami", nil)
+		if err != nil {
+			return "", err
+		}
+		var result struct {
+			Handle string `json:"handle"`
+		}
+		if err := json.Unmarshal(data, &result); err != nil {
+			return "", fmt.Errorf("decode extension response: %w", err)
+		}
+		if result.Handle == "" {
+			return "", errors.New("Chrome extension returned an empty Codeforces handle")
+		}
+		return result.Handle, nil
+	}
+	browser, err := codeforces.NewBrowser(cfg)
+	if err != nil {
+		return "", err
 	}
 	return browser.Auth(ctx)
 }
@@ -372,11 +455,7 @@ func (c *command) start(ctx context.Context, args []string) error {
 	if language != "cpp" && language != "python" {
 		return errors.New("language must be cpp or python")
 	}
-	browser, err := codeforces.NewBrowser(cfg)
-	if err != nil {
-		return err
-	}
-	statement, err := browser.FetchStatement(ctx, problem)
+	statement, err := c.fetchStatement(ctx, cfg, problem)
 	if err != nil {
 		return err
 	}
@@ -538,15 +617,11 @@ func (c *command) submit(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	browser, err := codeforces.NewBrowser(cfg)
-	if err != nil {
-		return err
-	}
 	programType := cfg.ProgramType
 	if programType == "" {
 		programType = defaultProgramType(session.Language)
 	}
-	if err := browser.Submit(ctx, session.Problem, string(source), programType); err != nil {
+	if err := c.submitSource(ctx, cfg, session.Problem, string(source), programType); err != nil {
 		return err
 	}
 	_ = workspace.Record(dir, &session, model.Attempt{At: time.Now(), Kind: "submit", Success: true, Detail: "sent to Codeforces"})
@@ -556,6 +631,68 @@ func (c *command) submit(ctx context.Context, args []string) error {
 	}
 	fmt.Fprintf(c.out, "Submitted %s as %s. Run `cfx status --wait`.\n", session.Problem.ID(), cfg.Handle)
 	return nil
+}
+
+func (c *command) fetchStatement(ctx context.Context, cfg config.Config, problem model.Problem) (model.Statement, error) {
+	if cfg.BrowserMode == "extension" {
+		fmt.Fprintln(c.err, "Waiting for the cfx Chrome extension...")
+		data, err := c.runExtension(ctx, cfg, "statement", map[string]any{
+			"contestId": problem.ContestID,
+			"index":     problem.Index,
+		})
+		if err != nil {
+			return model.Statement{}, err
+		}
+		var result struct {
+			HTML string `json:"html"`
+			URL  string `json:"url"`
+		}
+		if err := json.Unmarshal(data, &result); err != nil {
+			return model.Statement{}, fmt.Errorf("decode extension response: %w", err)
+		}
+		return codeforces.ParseStatement(strings.NewReader(result.HTML), problem, result.URL)
+	}
+	browser, err := codeforces.NewBrowser(cfg)
+	if err != nil {
+		return model.Statement{}, err
+	}
+	return browser.FetchStatement(ctx, problem)
+}
+
+func (c *command) submitSource(ctx context.Context, cfg config.Config, problem model.Problem, source, programType string) error {
+	if cfg.BrowserMode == "extension" {
+		fmt.Fprintln(c.err, "Waiting for the cfx Chrome extension; the submission tab will be visible...")
+		_, err := c.runExtension(ctx, cfg, "submit", map[string]any{
+			"contestId":     problem.ContestID,
+			"index":         problem.Index,
+			"programTypeId": programType,
+			"source":        source,
+		})
+		return err
+	}
+	browser, err := codeforces.NewBrowser(cfg)
+	if err != nil {
+		return err
+	}
+	return browser.Submit(ctx, problem, source, programType)
+}
+
+func (c *command) runExtension(ctx context.Context, cfg config.Config, jobType string, payload any) (json.RawMessage, error) {
+	browser, err := codeforces.NewBrowser(cfg)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		timer := time.NewTimer(300 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			_ = exec.Command(browser.ChromeBinary, bridge.WakeURL).Start()
+		}
+	}()
+	return bridge.Run(ctx, cfg.ExtensionToken, jobType, payload, 2*time.Minute)
 }
 
 type catalog struct {

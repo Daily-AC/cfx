@@ -1,64 +1,111 @@
 # cfx
 
-`cfx` is a Codeforces training CLI designed to be driven by both a human and a
-coding agent. It keeps problem statements, samples, attempts, and session state
-in a local workspace while using Codeforces' public API for catalog and verdict
-data.
+`cfx` is an unofficial Codeforces training CLI for humans and coding agents.
+It turns a Codeforces problem into a reproducible local workspace containing
+the statement, samples, source template, agent coaching policy, and attempt
+history.
 
-## Install
+`cfx` has no OpenCLI dependency, hosted relay, or telemetry. It talks directly
+to the Codeforces public API. Browser-only operations use either an isolated
+Chrome profile or the optional extension embedded in the `cfx` binary.
 
-From this checkout:
+## Features
+
+- Sync and cache the public Codeforces problem catalog.
+- Pick problems by rating, tag, and accepted-history exclusion.
+- Fetch statements and samples despite Codeforces browser challenges by using
+  a user-owned persistent Chrome profile.
+- Generate `AGENTS.md` so a coding agent coaches progressively instead of
+  immediately revealing the solution.
+- Compile and run C++23 or Python solutions against samples with timeout and
+  whitespace-aware comparison.
+- Record tests, submissions, and verdicts in `session.json`.
+- Submit only after local samples pass and the user provides `--yes`.
+- Emit structured JSON for agent integration.
+- Reuse an existing signed-in Chrome profile without copying cookies.
+
+## Requirements
+
+- Chrome or Chromium
+- A C++23 compiler for C++ workspaces
+- Python 3 for Python workspaces
+
+Prebuilt binaries are attached to tagged GitHub releases for macOS, Linux, and
+Windows on amd64 and arm64.
+
+Install from source with Go 1.25 or newer:
+
+```bash
+go install github.com/e0-7/cfx/cmd/cfx@latest
+```
+
+Or build this checkout:
 
 ```bash
 go build -o cfx ./cmd/cfx
 ```
 
-The default Codeforces runtimes are GNU G++23 (`programTypeId=91`) for C++ and
-PyPy 3-64 (`programTypeId=70`) for Python. Override either with
-`cfx config set programTypeId ID` if Codeforces changes its runtime list.
-
-## First run
+## Quick start
 
 ```bash
-./cfx config set handle YOUR_HANDLE
-./cfx doctor
-./cfx auth
-./cfx sync
-```
+cfx doctor
+cfx extension install
+cfx auth
+cfx sync
 
-`auth` opens a dedicated Chrome profile under the user config directory. Log in
-to Codeforces and return to the terminal. Credentials are never handled or
-stored by `cfx`; Chrome owns the session cookies.
-
-## Training loop
-
-```bash
 # Pick an unsolved implementation problem around 1200.
-./cfx pick --rating 1200 --tag implementation --unsolved
+cfx pick --rating 1200 --tag implementation --unsolved
 
-# Fetch the statement and create ./cf-4A with main.cpp, samples and AGENTS.md.
-./cfx start 4A
-cd cf-4A
+# Create ./cf-1795b with statement, samples, main.cpp and AGENTS.md.
+cfx start 1795B
+cd cf-1795b
 
-# Commands are stable for agent use and accept --json.
 cfx show
 cfx test
-cfx status
-
-# External side effect: --yes is deliberately required.
 cfx submit --yes
+cfx status --wait
 ```
 
-The generated `AGENTS.md` asks the coding agent to coach in stages: clarify the
-idea first, provide a small hint on request, review pseudocode, and only write a
-complete solution when explicitly asked. `session.json` records local test and
-submission attempts so a later agent can resume with evidence instead of chat
-memory.
+`cfx extension install` extracts the bundled extension into the user config
+directory and opens `chrome://extensions`. Enable Developer mode, choose
+**Load unpacked**, and select the path printed by the command. This switches
+`cfx` to extension mode and reuses the signed-in Chrome profile where you load
+it. The CLI never copies or prints cookies.
 
-## Commands
+Run `cfx extension install` again after upgrading `cfx`. If the extension is
+already present, click **Reload** on its card so Chrome picks up the new bundled
+files. Browser-backed commands open a short-lived localhost page to wake the
+Manifest V3 worker automatically; the page closes itself after connecting.
+
+To use an isolated profile instead:
+
+```bash
+cfx config set browserMode dedicated
+cfx auth
+```
+
+Dedicated mode opens a visible Chrome profile stored under `CFX_HOME`. Close
+that Chrome window before launching another browser-backed `cfx` command. If a
+profile lock is already held, `cfx` reports this directly and suggests the
+extension mode.
+
+## Agent workflow
+
+Run your coding agent from the generated problem directory. The generated
+`AGENTS.md` establishes these defaults:
+
+- ask for and review the user's current idea first;
+- provide the smallest useful hint before a full solution;
+- challenge complexity and edge cases with concrete examples;
+- edit the source only when implementation is explicitly requested;
+- require real `cfx test --json` evidence before claiming samples pass;
+- submit only after the user explicitly requests the external action.
+
+All machine-facing commands support `--json` where structured output is useful:
 
 ```text
 cfx auth
+cfx extension install|path
 cfx config get|set <key> [value]
 cfx doctor [--json]
 cfx sync [--json]
@@ -70,5 +117,47 @@ cfx status [--wait] [--json]
 cfx submit --yes [--json]
 ```
 
-Codeforces documents a limit of one API call per two seconds. `cfx` caches the
-catalog and avoids polling faster than that limit.
+## Architecture
+
+Codeforces exposes catalog and verdict data through its public API but does not
+provide problem statements or submission through that API. `cfx` therefore
+uses two deliberately separate transports:
+
+1. Public JSON API for catalog, accepted history, and verdicts. Requests are
+   rate-limited to one every two seconds and retried only for transport or 5xx
+   failures.
+2. A visible local Chrome/Chromium session for authentication, statements, and
+   the submission form. Dedicated mode launches a persistent profile through
+   the Chrome DevTools Protocol. Extension mode uses an unpacked Manifest V3
+   extension embedded in the binary and a short-lived bridge bound only to
+   `127.0.0.1:27121`.
+
+The bridge exists only while a browser-backed command is waiting. Requests must
+include a random installation token. Chrome host-permission requests may omit
+the `Origin` header; when present, it must use the `chrome-extension://` scheme.
+There is no remote service.
+
+The default Codeforces runtimes are GNU G++23 (`programTypeId=91`) for C++ and
+PyPy 3-64 (`programTypeId=70`) for Python. Override the runtime if Codeforces
+changes its list:
+
+```bash
+cfx config set programTypeId ID
+```
+
+Set `CFX_HOME` to isolate config, cache, and the Chrome profile during testing.
+
+## Safety and project status
+
+This project is unofficial and is not endorsed by Codeforces. Use it for your
+own training and respect Codeforces rules, especially during live or virtual
+contests. `cfx` does not bypass login challenges: authentication is always
+completed by the user in a visible browser.
+
+Training workspaces execute local source code. Do not run untrusted workspaces.
+See [SECURITY.md](SECURITY.md) for the local trust model and
+[CONTRIBUTING.md](CONTRIBUTING.md) for development requirements.
+
+## License
+
+MIT

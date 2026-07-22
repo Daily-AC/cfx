@@ -9,12 +9,14 @@ import (
 )
 
 type Config struct {
-	Handle       string `json:"handle,omitempty"`
-	Language     string `json:"language"`
-	CPPCompiler  string `json:"cppCompiler"`
-	Python       string `json:"python"`
-	ChromeBinary string `json:"chromeBinary,omitempty"`
-	ProgramType  string `json:"programTypeId"`
+	Handle         string `json:"handle,omitempty"`
+	Language       string `json:"language"`
+	CPPCompiler    string `json:"cppCompiler"`
+	Python         string `json:"python"`
+	ChromeBinary   string `json:"chromeBinary,omitempty"`
+	BrowserMode    string `json:"browserMode"`
+	ExtensionToken string `json:"extensionToken,omitempty"`
+	ProgramType    string `json:"programTypeId"`
 }
 
 func Default() Config {
@@ -22,6 +24,7 @@ func Default() Config {
 		Language:    "cpp",
 		CPPCompiler: "g++",
 		Python:      "python3",
+		BrowserMode: "dedicated",
 	}
 }
 
@@ -59,6 +62,9 @@ func Load() (Config, error) {
 	}
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return cfg, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if cfg.BrowserMode == "" {
+		cfg.BrowserMode = "dedicated"
 	}
 	return cfg, nil
 }
