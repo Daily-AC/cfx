@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -99,12 +100,7 @@ func (c *Client) get(ctx context.Context, method string, params url.Values, out 
 	if len(params) > 0 {
 		u += "?" + params.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("User-Agent", "cfx/0.1 (+https://github.com/e0-7/cfx)")
-	resp, err := c.HTTP.Do(req)
+	resp, err := c.doGET(ctx, u)
 	if err != nil {
 		return fmt.Errorf("Codeforces API %s: %w", method, err)
 	}
@@ -123,4 +119,36 @@ func (c *Client) get(ctx context.Context, method string, params url.Values, out 
 		return fmt.Errorf("decode Codeforces API %s result: %w", method, err)
 	}
 	return nil
+}
+
+func (c *Client) doGET(ctx context.Context, target string) (*http.Response, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "cfx/0.1 (+https://github.com/e0-7/cfx)")
+		resp, err := c.HTTP.Do(req)
+		if err == nil && resp.StatusCode < http.StatusInternalServerError {
+			return resp, nil
+		}
+		if err != nil {
+			lastErr = err
+		} else {
+			lastErr = fmt.Errorf("HTTP %s", resp.Status)
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}
+		if attempt < 2 {
+			timer := time.NewTimer(2 * time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	return nil, lastErr
 }
