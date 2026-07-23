@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/e0-7/cfx/internal/app"
+	"github.com/Daily-AC/cfx/internal/app"
 )
 
 func main() {

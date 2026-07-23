@@ -18,13 +18,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/e0-7/cfx/internal/bridge"
-	"github.com/e0-7/cfx/internal/codeforces"
-	"github.com/e0-7/cfx/internal/config"
-	"github.com/e0-7/cfx/internal/extension"
-	"github.com/e0-7/cfx/internal/model"
-	"github.com/e0-7/cfx/internal/runner"
-	"github.com/e0-7/cfx/internal/workspace"
+	"github.com/Daily-AC/cfx/internal/bridge"
+	"github.com/Daily-AC/cfx/internal/codeforces"
+	"github.com/Daily-AC/cfx/internal/config"
+	"github.com/Daily-AC/cfx/internal/extension"
+	"github.com/Daily-AC/cfx/internal/model"
+	"github.com/Daily-AC/cfx/internal/runner"
+	"github.com/Daily-AC/cfx/internal/workspace"
 )
 
 var version = "0.1.0"

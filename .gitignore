@@ -1,6 +1,10 @@
 /cfx
 /dist/
 /.cfx/
+/.idea/
+/.vscode/
+.DS_Store
+coverage.out
 *.out
 *.exe
 __pycache__/

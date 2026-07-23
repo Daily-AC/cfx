@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/e0-7/cfx/internal/config"
-	"github.com/e0-7/cfx/internal/model"
-	searcher "github.com/e0-7/cfx/internal/search"
-	"github.com/e0-7/cfx/internal/workspace"
+	"github.com/Daily-AC/cfx/internal/config"
+	"github.com/Daily-AC/cfx/internal/model"
+	searcher "github.com/Daily-AC/cfx/internal/search"
+	"github.com/Daily-AC/cfx/internal/workspace"
 )
 
 type stringListFlag []string

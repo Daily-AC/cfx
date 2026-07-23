@@ -7,7 +7,7 @@ that can regress.
 
 Requirements:
 
-- Go 1.25 or newer
+- Go 1.25.12 or newer
 - Chrome or Chromium for browser-backed integration tests
 - A C++23 compiler and Python 3 for runner tests
 

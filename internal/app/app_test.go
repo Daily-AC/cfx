@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/e0-7/cfx/internal/codeforces"
-	"github.com/e0-7/cfx/internal/model"
+	"github.com/Daily-AC/cfx/internal/codeforces"
+	"github.com/Daily-AC/cfx/internal/model"
 )
 
 func TestParseProblemID(t *testing.T) {

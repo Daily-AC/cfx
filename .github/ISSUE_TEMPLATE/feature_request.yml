@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a focused improvement to cfx.
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Training workflow problem
+      description: Describe the competitive-programming workflow that is difficult today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Show the desired command and its observable output or effect.
+      placeholder: |
+        cfx ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any existing cfx command or external tool you tried.

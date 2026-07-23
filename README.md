@@ -1,5 +1,9 @@
 # cfx
 
+[![CI](https://github.com/Daily-AC/cfx/actions/workflows/ci.yml/badge.svg)](https://github.com/Daily-AC/cfx/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Daily-AC/cfx?display_name=tag)](https://github.com/Daily-AC/cfx/releases)
+[![License](https://img.shields.io/github/license/Daily-AC/cfx)](LICENSE)
+
 `cfx` is an unofficial Codeforces training CLI for humans and coding agents.
 It turns a Codeforces problem into a reproducible local workspace containing
 the statement, samples, source template, agent coaching policy, and attempt
@@ -36,10 +40,10 @@ Chrome profile or the optional extension embedded in the `cfx` binary.
 Prebuilt binaries are attached to tagged GitHub releases for macOS, Linux, and
 Windows on amd64 and arm64.
 
-Install from source with Go 1.25 or newer:
+Install from source with Go 1.25.12 or newer:
 
 ```bash
-go install github.com/e0-7/cfx/cmd/cfx@latest
+go install github.com/Daily-AC/cfx/cmd/cfx@latest
 ```
 
 Or build this checkout:

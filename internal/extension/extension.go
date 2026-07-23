@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/e0-7/cfx/internal/config"
+	"github.com/Daily-AC/cfx/internal/config"
 )
 
 //go:embed assets/*
