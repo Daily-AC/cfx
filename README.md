@@ -13,6 +13,13 @@ history.
 to the Codeforces public API. Browser-only operations use either an isolated
 Chrome profile or the optional extension embedded in the `cfx` binary.
 
+## Demo
+
+[![cfx terminal workflow: search, start, test, and submit](docs/assets/cfx-demo.gif)](docs/assets/cfx-demo.mp4)
+
+Search for a problem, create a complete contest workspace, train with an agent,
+run local samples, and submit explicitly. [Open the full-resolution MP4](docs/assets/cfx-demo.mp4).
+
 ## Features
 
 - Sync and cache the public Codeforces problem and contest catalogs.
