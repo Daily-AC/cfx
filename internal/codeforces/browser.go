@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Daily-AC/cfx/internal/config"
+	"github.com/Daily-AC/cfx/internal/model"
 	"github.com/PuerkitoBio/goquery"
-	"github.com/e0-7/cfx/internal/config"
-	"github.com/e0-7/cfx/internal/model"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"

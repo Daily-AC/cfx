@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/e0-7/cfx/internal/model"
+	"github.com/Daily-AC/cfx/internal/model"
 )
 
 type ProblemFilter struct {

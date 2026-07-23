@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/e0-7/cfx/internal/model"
+	"github.com/Daily-AC/cfx/internal/model"
 )
 
 const defaultAPI = "https://codeforces.com/api"
@@ -137,7 +137,7 @@ func (c *Client) doGET(ctx context.Context, target string) (*http.Response, erro
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("User-Agent", "cfx/0.1 (+https://github.com/e0-7/cfx)")
+		req.Header.Set("User-Agent", "cfx/0.1 (+https://github.com/Daily-AC/cfx)")
 		resp, err := c.HTTP.Do(req)
 		if err == nil && resp.StatusCode < http.StatusInternalServerError {
 			return resp, nil

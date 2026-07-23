@@ -3,7 +3,7 @@ package search
 import (
 	"testing"
 
-	"github.com/e0-7/cfx/internal/model"
+	"github.com/Daily-AC/cfx/internal/model"
 )
 
 func TestProblemsFiltersAndSorts(t *testing.T) {
