@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -41,7 +42,7 @@ func Install(token string) (string, string, error) {
 		if entry.IsDir() {
 			continue
 		}
-		body, err := assets.ReadFile(filepath.Join("assets", entry.Name()))
+		body, err := assets.ReadFile(path.Join("assets", entry.Name()))
 		if err != nil {
 			return "", "", err
 		}
